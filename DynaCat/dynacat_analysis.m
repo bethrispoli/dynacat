@@ -1,0 +1,605 @@
+%function err = dynacat_analysis(session_path, init_params, glm_params, clip, QA)
+% 
+% Adapted from automated analysis of fMRI data from fLoc funcional localizer experiment 
+% using vistasoft functions (https://github.com/vistalab/vistasoft). 
+% 
+% err = fLocAnalysis(session, [init_params], [glm_params], clip, [QA])
+%
+% INPUTS
+% 1) session_path: fullpath to scanning session directory in ~/DynaCat/data/ that 
+%             is being analyzed (string), ex. ~/DynaCat/data/subj-01/session1/
+% 2) init_params: optional preprocessing parameters organized into a
+%                 structure appropriate for vistasoft's mrInit function
+% 3) glm_parms: optional GLM analysis parameters organized into a structure
+%               appropriate for vistasoft's er_setParams
+% 4) clip: number of TRs to clip from beginnning of each run (int)
+% 5) QA: optional flag controlling whether analysis will return if
+%        within scan or between scan motion exceeds 2 voxels (boolean, default is
+%        false)
+%
+% OUTPUT
+% 1) err: 1 if analysis terminated with an error, 0 if analysis completed
+% 
+% Each session directory must contain the following files
+% 1) An inplane nifti containing 'inplane' in the nifti name and ending in
+%    nii.gz
+% 2) Functional nifti's ending in runX.nii.gz where X is the corresponding
+%    run number
+% 3) Parfiles ending in runX.par where X is the corresponding run number
+%
+% By default the code generates the following voxel-wise parameters maps: 
+% Beta values, model residual error, proportion of variance explained, and
+% GLM contrasts (t-values). All parameter maps are saved as .mat and nifti 
+% files in session/Inplane/GLMs/ and can be viewed in vistasoft. The code 
+% also writes a file named "fLocAnalysis_log.txt" that logs progress of the 
+% analysis in vistasoft, and saves input and glm parameters as 
+% fLocAnalysisParams.mat. If there are 10 conditions specified, 15 contrast
+% maps will be generated. 10 maps will contrast each individual condition
+% versus all others. The other 5 maps will contrast conditions 1 and 2 vs
+% all others, 3 and 4 versus all others, and so on. If there are not 10
+% conditions specified in the parfiles, then the maps generated will
+% contrast each individual condition versus all others.
+% 
+% AS 8/2018
+% AR & MN 09/2018
+% started editing this for dynacat on 27 june 2023 BR
+
+
+%% Set subject session path
+% ex. '/home/brispoli/DynamicCategories/data/DynaCat/subj-02/session1/'
+% this is all being set here right now since the script is currently not a function
+
+session_path = '/share/kalanit/biac2/kgs/projects/DynamicCategories/data/DynaCat/subj-01/session1/';
+subID = 'subj-01';
+sessionNum = 1;
+clip = 0;
+QA = false;
+[~, init_params, dglm_params] = dynacat_AnalysisParams(session_path, clip);
+glm_params = dglm_params;
+
+% save init_params and glm_params
+cd(session_path);
+save dynacat_AnalysisParams.mat init_params glm_params
+[sessions, fs_sessions] = dynacat_setSessions(subID, sessionNum);
+
+
+%% Read nifti files
+
+nii = readFileNifti(init_params.functionals{1}); 
+nslices = size(nii.data, 3);
+
+% open logfile to track progress of analysis
+logFileName = fullfile('./dynacatAnalysis_log.txt');
+lid = fopen(logFileName, 'w+');
+fprintf(lid, 'Starting analysis for session %s. \n\n', session_path);
+fprintf('Starting analysis for session %s. \n\n', session_path);
+
+%% Initialize session
+cd ..
+% inititalize vistasoft session and open hidden inplane view
+fprintf(lid, 'Initializing vistasoft session directory in: \n%s \n\n', session_path);
+fprintf('Initializing vistasoft session directory in: \n%s \n\n', session_path);
+setpref('VISTA', 'verbose', false); % suppress wait bar
+% if exist(fullfile(session_path,'inplane'), 'dir') ~= 7
+%     mrInit(init_params); % saves mrSESSION.mat under session's folder --- dont know why this is set up this way
+% end
+
+mrsession_path = fullfile(session_path, 'MrSESSION.mat');
+if exist(mrsession_path, 'file') == 0
+    mrInit(init_params); % saves mrSESSION.mat under session's folder
+end
+
+cd(fullfile(session_path))
+hi = initHiddenInplane('Original', 1);
+
+%% Within-scan motion correction
+
+% run within-scan motion compensation
+fprintf(lid, 'Starting within-scan motion compensation... \n');
+fprintf('Starting within-scan motion compensation... \n');
+setpref('VISTA', 'verbose', false); % suppress wait bar
+if exist(fullfile(session_path, 'Images', 'Within_Scan_Motion_Est.fig'), 'file') ~= 2
+    hi = motionCompSelScan(hi, 'MotionComp', 1:length(init_params.functionals), ...
+        init_params.motionCompRefFrame, init_params.motionCompSmoothFrames);
+    saveSession; close all;
+end
+
+% check to see if there is too much motion
+fig = openfig(fullfile('Images', 'Within_Scan_Motion_Est.fig'), 'invisible');
+L = get(get(fig, 'Children'), 'Children');
+if QA
+    for rr = 1:length(init_params.functionals)
+        motion_est = L{rr + 1}.YData;
+        if max(motion_est(:)) > 2
+            fprintf(lid, 'Warning -- Within-scan motion exceeds 2 voxels. \n');
+            fprintf('Warning -- Within-scan motion exceeds 2 voxels. \n');
+            fprintf(lid,'Exited analysis'); 
+            fprintf('Exited analysis');
+            ffclose(lid); 
+            return; 
+        end
+        fprintf(lid,'QA checks passed for run %i. ',rr);
+        fprintf('QA checks passed for run %i. ',rr);
+    end
+end
+
+fprintf(lid, 'Within-scan motion compensation complete. \n\n');
+fprintf('Within-scan motion compensation complete. \n\n');
+
+%% Between-scan motion correction
+
+% group motion compensation scans
+hi = initHiddenInplane('MotionComp', init_params.scanGroups{1}(1));
+hi = er_groupScans(hi, init_params.scanGroups{1});
+
+% run between-scan motion compensation
+fprintf(lid, 'Starting between-scan motion compensation... \n');
+fprintf('Starting between-scan motion compensation... \n');
+if exist(fullfile(session_path, 'Between_Scan_Motion.txt'), 'file') ~= 2
+    hi = initHiddenInplane('MotionComp', 1);
+    baseScan = 1; targetScans = 1:length(init_params.functionals);
+    [hi, M] = betweenScanMotComp(hi, 'MotionComp_RefScan1', baseScan, targetScans);
+    %%%%%%%%%%%%%%% changed this to create local paths MN 12/2018 %%%%%%%%
+    % fname = fullfile(session, 'Inplane', 'MotionComp_RefScan1', 'ScanMotionCompParams');
+     fname = fullfile('Inplane', 'MotionComp_RefScan1', 'ScanMotionCompParams');
+     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    save(fname, 'M', 'baseScan', 'targetScans');
+    hi = selectDataType(hi, 'MotionComp_RefScan1');
+    saveSession; close all;
+end
+
+% calculate between-scan motion
+fid = fopen(fullfile('Between_Scan_Motion.txt'), 'r');
+motion_est = zeros(length(init_params.functionals) - 1, 3);
+for rr = 1:length(init_params.functionals) - 1
+    ln = strsplit(fgetl(fid), ' ');
+    motion_est(rr, 1) = str2double(ln{8});
+    motion_est(rr, 2) = str2double(ln{11});
+    motion_est(rr, 3) = str2double(ln{14});
+end
+fclose(fid);
+
+% check to see if there is too much motion
+if QA
+    if max(motion_est(:)) > 2
+        fprintf(lid, 'Warning -- Between-scan motion exceeds 2 voxels. \nExited analysis.');
+        fprintf('Warning -- Between-scan motion exceeds 2 voxels. \nExited analysis.');
+    	fclose(lid); return; 
+    else
+        fprintf(lid,'QA checks passed. \n\n');
+        fprintf('QA checks passed. \n\n');
+    end
+end
+
+fprintf(lid, 'Between-scan motion compensation complete.\n\n');
+fprintf('Between-scan motion compensation complete.\n\n');
+
+%% Find conditions for GLM
+
+% complile list of all conditions in parfiles
+[cond_nums, conds] = deal([]); cnt = 0;
+for rr = 1:length(init_params.functionals)
+    fid = fopen(init_params.parfile{rr}, 'r');
+    while ~feof(fid)
+        ln = fgetl(fid); cnt = cnt + 1;
+        if isempty(ln); return; end; ln(ln == sprintf('\t')) = ' ';
+        prts = deblank(strsplit(ln, ' ')); prts(cellfun(@isempty, prts)) = [];
+        cond_nums(cnt) = str2double(prts{2});
+        conds{cnt} = prts{3};
+    end
+    fclose(fid);
+end
+
+% make a list of unique condition numbers and corresponding condition names
+cond_num_list = unique(cond_nums); cond_list = cell(1, length(cond_num_list));
+for cc = 1:length(cond_num_list)
+    cond_list{cc} = conds{find(cond_nums == cond_num_list(cc), 1)};
+end
+
+% remove baseline from lists of conditions
+bb = find(cond_num_list == 0); cond_num_list(bb) = []; cond_list(bb) = [];
+% remove task repeats from lists of conditions
+tr = find(cond_num_list == 33); cond_num_list(tr) = []; cond_list(tr) = [];
+
+%% Initialize new inplane, group scans, and set glm parameters and parfiles
+hi = initHiddenInplane('MotionComp_RefScan1', init_params.scanGroups{1}(1));
+hi = er_groupScans(hi, init_params.scanGroups{1});
+er_setParams(hi, glm_params);
+hi = er_assignParfilesToScans(hi, init_params.scanGroups{1}, init_params.parfile);
+saveSession; close all;
+
+%% Run GLM
+fprintf(lid, 'Performing GLM analysis for %s... \n\n', session_path);
+fprintf('Performing GLM analysis for %s... \n\n', session_path);
+hi = initHiddenInplane('MotionComp_RefScan1', init_params.scanGroups{1}(1));
+hi = applyGlm(hi, 'MotionComp_RefScan1', init_params.scanGroups{1}, glm_params);
+
+%% Compute contrast maps
+cd(session_path); %probably dont need this when running everything in a row after testing
+
+% store functional nifti data fields
+functionalNifti = readFileNifti(init_params.functionals{1});
+
+% making a director for nifti maps
+mkdir Inplane/GLMs/NiftiMaps
+hi = initHiddenInplane('GLMs', 1);
+
+% compute each individual condition vs all
+for curr_cond = 1:length(cond_list)
+    active_cond = curr_cond;
+    control_conds = setdiff(cond_num_list, active_cond);
+    contrast_name = [strcat(cond_list{curr_cond}) '_vs_all'];
+    hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
+
+    % storing contrast map as nifti
+    niftiFileName = [contrast_name,'.nii.gz'];
+    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName,functionalNifti);
+    % saving nifti under Inplane/GLMs/NiftiMaps
+    cd Inplane/GLMs/NiftiMaps
+    writeFileNifti(contrastNifti);
+    cd ../../..
+end
+
+% compute categories constrasts
+hands = [1 2 3 4];
+faces = [5 6 7 8];
+bodies = [9 10 11 12];
+animals = [13 14 15 16];
+objects1 = [17 18 19 20];
+objects2 = [21 22 23 24];
+scenes1 = [25 26 27 28];
+scenes2 = [29 30 31 32];
+
+categories = {hands faces bodies animals objects1 objects2 scenes1 scenes2};
+categories_names = {'hands' 'faces' 'bodies' 'animals' 'objects1' 'objects2' 'scenes1' 'scenes2'};
+
+for category_index = 1:length(categories)
+    curr_category = categories{category_index};
+
+    active_conds = curr_category;
+    control_conds = setdiff(cond_num_list, active_conds);
+    contrast_name = [strcat(categories_names{category_index}) '_vs_all'];
+    hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+
+    % storing contrast map as nifti
+    niftiFileName = [contrast_name,'.nii.gz'];
+    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+    % saving nifti under Inplane/GLMs/NiftiMaps
+    cd Inplane/GLMs/NiftiMaps
+    writeFileNifti(contrastNifti);
+    cd ../../..
+
+end
+
+
+%compute animate vs inanimate
+active_conds = [hands faces bodies animals];
+control_conds = [objects1 objects2 scenes1 scenes2];
+contrast_name = 'animate_vs_inanimate';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+
+% compute dynamic format contrasts
+normal = [1 5 9 13 17 21 25 29];
+scrambled = [3 7 11 15 19 23 27 31];
+linear = [2 6 10 14 18 22 26 30];
+still = [4 8 12 16 20 24 28 32];
+
+dynamic_format = {normal scrambled linear still};
+dynamic_format_names = {'normal' 'scrambled' 'linear' 'still'};
+
+for dynamic_format_index = 1:length(dynamic_format)
+    curr_dynamic_format = dynamic_format{dynamic_format_index};
+
+    active_conds = curr_dynamic_format;
+    control_conds = setdiff(cond_num_list, active_conds);
+    contrast_name = [strcat(dynamic_format_names{dynamic_format_index}) '_vs_all'];
+    hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+
+    % storing contrast map as nifti
+    niftiFileName = [contrast_name,'.nii.gz'];
+    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+    % saving nifti under Inplane/GLMs/NiftiMaps
+    cd Inplane/GLMs/NiftiMaps
+    writeFileNifti(contrastNifti);
+    cd ../../..
+
+end
+
+
+% compute linear vs still
+active_conds = linear;
+control_conds = still;
+contrast_name = 'linear_vs_still';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+% compute normal vs linear
+active_conds = normal;
+control_conds = linear;
+contrast_name = 'normal_vs_linear';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+% compute normal vs scrambled
+active_conds = normal;
+control_conds = scrambled;
+contrast_name = 'normal_vs_scrambled';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+% compute normal vs still
+active_conds = normal;
+control_conds = still;
+contrast_name = 'normal_vs_still';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functionalNifti);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+
+
+
+fprintf(lid, 'GLM parameter maps saved in: \n%s/GLMs/... \n\n', session_path);
+fprintf('GLM parameter maps saved in: \n%s/GLMs/... \n\n', session_path);
+
+fprintf(lid, 'DynaCat analysis for %s is complete! \n\n', session_path);
+fprintf('DynaCat analysis for %s is complete! \n', session_path); 
+
+
+%% Align session to whole brain anatomy
+
+% wokring on adapting this jewelia's from toon pipeline:
+
+% Pathing
+share_prefix = '/share/kalanit';
+oak_prefix = '/oak/stanford/groups';
+
+% adds Dawn's toonAtlas code to path that includes the alignment tools (alignvolumedata folder)
+addpath(genpath(fullfile(share_prefix, 'biac2/kgs/projects/toonAtlas/code')))
+
+% Setup
+% Use setSessions_dynacat.m to setup the subject, session, and FreeSurfer
+% directories
+
+% setSessions information
+% subID = 'subj-01';
+% sessionNum = 1;
+% [sessions, fs_sessions] = dynacat_setSessions(subID, sessionNum);
+
+setup.vistaDir = fullfile(share_prefix, 'biac2', 'kgs', 'projects', 'DynamicCategories', 'data', 'DynaCat');
+setup.fsDir = fullfile(share_prefix, 'biac2','kgs','anatomy','freesurferRecon');
+setup.subID = subID;
+setup.fsSession = fs_sessions;
+setup.sessionID = sessions;
+subjid = setup.fsSession;
+sessionID = session_path;
+
+% Set FreeSurfer Directory
+setenv('SUBJECTS_DIR', setup.fsDir);
+
+% Set vista and anataomy directories
+cd(session_path)
+
+anatDir = fullfile(setup.vistaDir, setup.subID, setup.sessionID, '3DAnatomy');
+if ~exist(anatDir,'dir')
+    fprintf(1, 'Error: 3DAnatomy link does not exist. Make softlink')
+    return
+end
+
+%%
+
+% Convert T1 for mrvista and fix class file
+% Get subject's FreeSurfer recon path 
+cd(fullfile(setup.fsDir, setup.fsSession))
+
+% Path to T1.mgz file created by FreeSurfer
+T1.mgz = sprintf('./mri/T1.mgz');
+
+% Path to t1.nii.gz to be output by conversion
+T1.nii = sprintf('./nifti/t1.nii.gz');
+if ~exist('/nifti', 'dir')
+    mkdir('nifti');
+end
+
+
+% Convert FS recon t1.mgz to nifti format (using nearest neighbor).
+% This function cannot overwrite any existing files, so if there is an
+% existing file, it will ask the user what to do. 
+if exist(T1.nii, 'file')
+    prompt = 'This file already exists. Are you sure you want to overwrite it? Press 1 for yes, 2 for no: ';
+    x = input(prompt);
+    if x == 1
+        delete './nifti/t1.nii.gz'
+        str = sprintf('mri_convert --resample_type nearest --out_orientation RAS -i %s -o %s', T1.mgz, T1.nii);
+        system(str)
+    end
+else
+    str = sprintf('mri_convert --resample_type nearest --out_orientation RAS -i %s -o %s', T1.mgz, T1.nii);
+    system(str)
+end
+
+% Convert the FS ribbon.mgz to a nifti class file (which is used by mrVista
+% to create 3D meshes)
+fsRibbonFile  = fullfile('./mri/ribbon.mgz');  % Full path to the ribbon.mgz file, or it can be name of directory in freesurfer subject directory (string). 
+outfile       = fullfile('./nifti/t1_class.nii.gz');
+fillWithCSF   = true;
+alignTo       = T1.nii;
+resample_type = [];
+if exist(outfile, 'file')
+    x = input(prompt);
+    if x == 1
+        delete './nifti/t1_class.nii.gz'
+        fs_ribbon2itk(fsRibbonFile, outfile, fillWithCSF, alignTo, resample_type)
+    end
+else
+    fs_ribbon2itk(fsRibbonFile, outfile, fillWithCSF, alignTo, resample_type)
+end
+
+
+% Copy our T1 and class file over to the mrVista session
+copyfile(T1.nii, anatDir)
+copyfile(outfile, anatDir)
+
+cd(session_path) %shouldnt need this cd if the filepaths are set up correctly in startup.m
+
+% Set vAnatomy
+vANATOMYPATH = '3DAnatomy/t1.nii.gz';
+saveSession
+% check volume anatomy path
+msgbox(['Reference Anatomy Path: ' getVAnatomyPath], 'getVAnatomyPath');
+
+% Align inplane anatomy to volume anatomy
+% step through s_alignInplaneToAnatomical.m
+% (or align using rxAlign and Nestares) 
+% First by hand: rxAlign. Then run the other sections, up to fitting
+% ellipse. Make sure that the ellipse covers the brain (or most of it) but
+% excludes the skull. 
+% Keep running the other sections (except for 4d' (OPTIONAL) Automatic
+% alignment). Then continue the rest of the sectionss to save.
+
+%s_alignInplaneToAnatomical
+edit s_alignInplaneToAnatomical %opens alignment, run one section at a time
+
+%% Install segmentation and transform timeseries to the volume
+
+% Set vAnatomy-- need to put this somewhere where it gets run for sure
+% before this and not just if you do the alignment
+vANATOMYPATH = '3DAnatomy/t1.nii.gz';
+saveSession
+
+dynacat_2gray(session_path)
+
+%% Import FreeSurfer mesh into mrVista
+fsSurfPath = fullfile(setup.fsDir,  setup.fsSession, 'surf');
+vista3DAnatomyPath = fullfile(session_path, '3DAnatomy');
+dynacat_surf2msh(fsSurfPath, vista3DAnatomyPath)
+
+% Note: in dynacat_surf2msh, we have to comment out the meshVisualize if using
+% a newer version of Ubuntu
+
+%% Import contrast maps into FreeSurfer
+% go through all the generated constrast maps for Gray and convert them
+% into FreeSurfer compatible maps in 3DAnatomy/surf
+% this takes a while because it's converting all the maps at once!
+
+fsSurfPath = fullfile(setup.fsDir,  setup.fsSession, 'surf');
+
+% get an array of all the .mat contrast filenames
+session_gray_dir = fullfile(session_path, 'Gray', 'GLMs');
+gray_GLMs = dir(fullfile(folderPath, '*.*'));
+gray_contrasts_names = {gray_GLMs.name};
+gray_contrasts_names = gray_contrasts_names(5:length(gray_contrasts_names)); %skips the first 4 entries of the .mat file arrays
+
+% convert each contrast map into a Freesurfer compatible map
+for i = 1:length(gray_contrasts_names)
+    curr_contrast_name_cell = gray_contrasts_names(i);
+    curr_contrast_name = char(curr_contrast_name_cell{1});
+    map_path = fullfile(session_gray_dir, curr_contrast_name);
+    
+    dynacat_mrv2fs_parameterMap(map_path, setup.fsDir, setup.fsSession)
+end
+
+disp(['Successfully converted ' num2str(length(gray_contrasts_names)) ' mrVista contrast maps into Freesurfer compatible maps! Saved to ' fsSurfPath '.'])
+fprintf(lid,'Successfully converted %d mrVista contrast maps into Freesurfer compatible maps.\n\n', length(gray_contrasts_names));
+
+% % map path goes to the .mat contrasts generated for the Gray
+% % (session1/Gray/GLMs not session1/Inplane/GLMs)
+% map_path = '/share/kalanit/biac2/kgs/projects/DynamicCategories/data/DynaCat/subj-03/session1/Gray/GLMs/faces-scrambled_vs_all.mat';
+% fs_id = setup.fsSession;
+% fs_path = setup.fsDir;
+% 
+% dynacat_mrv2fs_parameterMap(map_path, fs_path, fs_id)
+
+%% Save contrast map visualizations
+% using Freeview commands, load each contrast map in Freeview and save a
+% screenshot in subj-xx/session1/Images
+
+% this stuff would have been run right before this but in case you want to
+% run this seperately we will do it again here:
+session_gray_dir = fullfile(session_path, 'Gray', 'GLMs');
+gray_GLMs = dir(fullfile(folderPath, '*.*'));
+gray_contrasts_names = {gray_GLMs.name};
+gray_contrasts_names = gray_contrasts_names(5:length(gray_contrasts_names)); %skips the first 4 entries of the .mat file arrays
+
+% Remove the '.mat' extension from each filename to get an array of just contrast names
+contrasts_names = cellfun(@(x) strrep(x, '.mat', ''), gray_contrasts_names, 'UniformOutput', false);
+
+% generate lateral and ventral visualizations for each contrast 
+for i = 1:length(contrasts_names)
+    curr_contrast_name_cell = contrasts_names(i);
+    curr_contrast_name = char(curr_contrast_name_cell{1});
+    
+    disp(['Saving visualization for ' curr_contrast_name '. ' num2str(i) '/' num2str(length(contrasts_names)) ' remaining...'])
+    dynacat_saveFreeviewVisualizations(session_path, setup.fsDir, setup.fsSession, curr_contrast_name)
+end
+
+disp(['Successfully exported visualizations for ' num2str(length(contrasts_names)) ' maps! Saved to subj/session/Images.'])
+
+
+%% Add documentation
+
+% add MATLAB and Mr Vista Version to logfile 
+fprintf(lid,['---------------------------------------------------','\n\n']);
+fprintf(lid,['MATLAB version ',version,'\n\n']);
+load mrSESSION.mat
+fprintf(lid,['mrVista Version ',mrSESSION.mrVistaVersion,'\n\n']);
+
+% add all parameters used to logfile
+fprintf(lid,['---------------------------------------------------','\n\n']);
+load mrInit_params.mat
+% initialization params
+fprintf(lid,['Initialization parameters used\n\n',evalc('disp(params)')]);
+fprintf(lid,['including: functionals\n\n',evalc('disp(params.functionals(:))')]);
+fprintf(lid,['keepFrames\n\n',evalc('disp(params.keepFrames)')]);
+fprintf(lid,['parfiles\n\n',evalc('disp(params.parfile(:))')]);
+fprintf(lid,['---------------------------------------------------','\n\n']);
+% scan params
+for l = 1:length(dataTYPES(1).scanParams)
+    fprintf(lid,['Original data type scan ',num2str(l),' params:\n\n',l,evalc( 'disp(dataTYPES(1).scanParams(l))' )]);
+end
+fprintf(lid,['GLM data type scan params:\n\n',evalc('disp(dataTYPES(4).scanParams)')]);
+fprintf(lid,['---------------------------------------------------','\n\n']);
+% GLM params
+fprintf(lid,['Event analysis parameters used\n\n',evalc('disp(dataTYPES(length(dataTYPES)).eventAnalysisParams)')]);
+
+% close log file
+fclose(lid);
+err = 0;
+
+%Move directory back to fLoc from session
+cd ..
+
+%Clear workspace
+clearvars -except err
+
+%end

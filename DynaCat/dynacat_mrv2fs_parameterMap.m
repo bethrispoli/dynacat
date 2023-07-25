@@ -2,9 +2,10 @@ function out_paths = dynacat_mrv2fs_parameterMap(map_path, fs_path, fs_id, cba_f
 % Transforms a mrVista paramter map into FreeSurfer-compatible .mgh files.
 %
 % Inputs
-%   map_path: path to .mat file storing mrVista parameter 
-%   fs_id: name of subject directory in FreesurferSegmentations
-%   cba_flag: option to transform the map to fsaverage using CBA
+%   map_path:       path to .mat file storing mrVista parameter
+%   fs_path:        path to the freesurfer recon directory
+%   fs_id:          name of subject directory in FreesurferSegmentations
+%   cba_flag:       option to transform the map to fsaverage using CBA
 %
 % Output
 %   out_paths: cell array of paths to all output .mgh files
@@ -25,6 +26,15 @@ if cba_flag == 1
     out_paths = cell(2, 2);
 else
     out_paths = cell(1, 2);
+end
+
+% create registration file if it doesn't exist
+reg = fullfile(fs_dir,'surf','register.dat');
+if ~isfile(reg)
+ origPath = [fs_dir, '/mri/orig.mgz'];
+ outFile = [fs_dir, '/surf/register.dat'];
+ cmd = ['tkregister2 --mov ' origPath ' --noedit --s ' fs_id ' --regheader --reg ' outFile];
+ unix(cmd)
 end
 
 % path to subject data in FreesurferSegmentations
@@ -48,20 +58,11 @@ unix(['mri_convert -ns 1 -odt float -rt nearest -rl orig.mgz ' ...
     map_name '.nii.gz ' map_name '.nii.gz --conform']);
 movefile(out_path, fullfile(surf_dir, [map_name '.nii.gz']));
 
-% create registration file if it doesn't exist
-reg = fullfile(fs_dir,'surf','register.dat');
-if ~isfile(reg)
- origPath = [fs_dir, '/mri/orig.mgz'];
- outFile = [fs_dir, '/surf/register.dat'];
- cmd = ['tkregister2 --mov ' origPath ' --noedit --s ' fs_id ' --regheader --reg ' outFile];
- unix(cmd)
-end
-
 % generate FreeSurfer surface files for each hemisphere
 cd(surf_dir);
 unix(['mri_vol2surf --mov ' map_name '.nii.gz ' ...
     '--reg register.dat --hemi lh --interp nearest --o ' ...
-    map_name '_lh.mgh --projdist 2']); % left hemi %%%%%%% not making a valid register.dat file
+    map_name '_lh.mgh --projdist 2']); % left hemi
 unix(['mri_vol2surf --mov ' map_name '.nii.gz ' ...
     '--reg register.dat --hemi rh --interp nearest --o ' ...
     map_name '_rh.mgh --projdist 2']); % right hemi

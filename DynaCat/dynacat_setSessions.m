@@ -26,7 +26,7 @@ switch subj
     case 'subj-02'
         if sessionNum == 1
             session = 'session1';
-            fs_session = 'TBD';
+            fs_session = 'ax202306_v72';
         % elseif sessionNr == 2
         %     session = 'RJ09_190112_19741_time_03_1';
         %     fs_session = 'RJ09_scn181028_recon0920_v6'; 

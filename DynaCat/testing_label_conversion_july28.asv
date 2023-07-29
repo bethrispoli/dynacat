@@ -1,0 +1,30 @@
+% DynaCat: Drawing and converting ROIs test script july 28
+
+%% Set subject session path
+% ex. '/home/brispoli/DynamicCategories/data/DynaCat/subj-02/session1/'
+session_path = '/share/kalanit/biac2/kgs/projects/DynamicCategories/data/DynaCat/subj-02/session1/';
+
+%% Load session parameters
+cd(session_path)
+% Load initialized session
+load mrInit_params.mat
+load mrSESSION.mat
+
+% Set vAnatomy
+vANATOMYPATH = '3DAnatomy/t1.nii.gz';
+saveSession
+
+%% convert labels
+
+
+label_dir = fullfile(setup.fsDir, setup.fsSession, 'label');
+labels = {labels([labels.isdir]==0).name)}
+labels = dir(fullfile(label_dir, '*.*'));
+
+
+
+
+labels = labels(cellfun(@(x) contains(x, 'dynacat'), labels));
+
+%%
+dynacat_freesurferLabel2niftiROI(setup.fsDir, setup.fsSession, 'lh', labels, session_path)

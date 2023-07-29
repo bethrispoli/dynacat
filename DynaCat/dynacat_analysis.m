@@ -1,9 +1,5 @@
-%function err = dynacat_analysis(session_path, init_params, glm_params, clip, QA)
-% 
 % Adapted from automated analysis of fMRI data from fLoc funcional localizer experiment 
 % using vistasoft functions (https://github.com/vistalab/vistasoft). 
-% 
-% err = fLocAnalysis(session, [init_params], [glm_params], clip, [QA])
 %
 % INPUTS
 % 1) session_path: fullpath to scanning session directory in ~/DynaCat/data/ that 
@@ -47,9 +43,8 @@
 
 %% Set subject session path
 % ex. '/home/brispoli/DynamicCategories/data/DynaCat/subj-02/session1/'
-
-session_path = '/share/kalanit/biac2/kgs/projects/DynamicCategories/data/DynaCat/subj-02/session1/';
-subID = 'subj-02';
+session_path = '/share/kalanit/biac2/kgs/projects/DynamicCategories/data/DynaCat/subj-03/session1/';
+subID = 'subj-03';
 sessionNum = 1;
 clip = 0;
 QA = false;
@@ -346,12 +341,11 @@ else
     fs_ribbon2itk(fsRibbonFile, outfile, fillWithCSF, alignTo, resample_type)
 end
 
-
 % Copy our T1 and class file over to the mrVista session
 copyfile(T1.nii, anatDir)
 copyfile(outfile, anatDir)
 
-cd(session_path) %shouldnt need this cd if the filepaths are set up correctly in startup.m
+cd(session_path)
 
 % Set vAnatomy
 vANATOMYPATH = '3DAnatomy/t1.nii.gz';
@@ -371,14 +365,20 @@ msgbox(['Reference Anatomy Path: ' getVAnatomyPath], 'getVAnatomyPath');
 %s_alignInplaneToAnatomical
 edit s_alignInplaneToAnatomical %opens alignment, run one section at a time
 
+%% Install segmentation
+dynacat_installSegmentation(session_path)
+
+%% Transform timeseries to the volume and trasnform contrast maps into Gray
+dynacat_maps2gray(session_path)
+
 %% Install segmentation and transform timeseries to the volume
 
 % Set vAnatomy-- need to put this somewhere where it gets run for sure
 % before this and not just if you do the alignment
 % vANATOMYPATH = '3DAnatomy/t1.nii.gz';
 % saveSession
-
-dynacat_2gray(session_path)
+% 
+% dynacat_2gray(session_path)
 
 %% Import FreeSurfer mesh into mrVista
 fsSurfPath = fullfile(setup.fsDir,  setup.fsSession, 'surf');
@@ -392,8 +392,6 @@ dynacat_surf2msh(fsSurfPath, vista3DAnatomyPath)
 % go through all the generated constrast maps for Gray and convert them
 % into FreeSurfer compatible maps in 3DAnatomy/surf
 % this takes a while because it's converting all the maps at once!
-
-%fsSurfPath = fullfile(setup.fsDir,  setup.fsSession, 'surf');
 
 % get an array of all the .mat contrast filenames
 session_gray_dir = fullfile(session_path, 'Gray', 'GLMs');
@@ -427,10 +425,10 @@ fprintf(lid,'Successfully converted %d mrVista contrast maps into Freesurfer com
 
 % this stuff would have been run right before this but in case you want to
 % run this seperately we will do it again here:
-session_gray_dir = fullfile(session_path, 'Gray', 'GLMs');
-gray_GLMs = dir(fullfile(session_gray_dir, '*.*'));
-gray_contrasts_names = {gray_GLMs.name};
-gray_contrasts_names = gray_contrasts_names(5:length(gray_contrasts_names)); %skips the first 4 entries of the .mat file arrays
+% session_gray_dir = fullfile(session_path, 'Gray', 'GLMs');
+% gray_GLMs = dir(fullfile(session_gray_dir, '*.*'));
+% gray_contrasts_names = {gray_GLMs.name};
+% gray_contrasts_names = gray_contrasts_names(5:length(gray_contrasts_names)); %skips the first 4 entries of the .mat file arrays
 
 % Remove the '.mat' extension from each filename to get an array of just contrast names
 contrasts_names = cellfun(@(x) strrep(x, '.mat', ''), gray_contrasts_names, 'UniformOutput', false);

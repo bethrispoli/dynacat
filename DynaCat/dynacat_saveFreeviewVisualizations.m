@@ -1,6 +1,7 @@
 function dynacat_saveFreeviewVisualizations(session_path, fs_path, fs_id, contrast_name)
 % dynacat_saveFreeviewVisualizations(fsPath, vistaPath)
-% saves FreeView visualized contrast maps into PNGs for both lh and rh
+% saves FreeView visualized contrast maps into PNGs for both lh and rh.
+% Currently set at a 1.5 threshold where values at 3 are visualized in red
 % 
 % Inputs
 % session_path      path to the subject's DynaCat session folder
@@ -41,18 +42,18 @@ rh_ventral_outputImage = fullfile(images_dir, rh_ventral_image_filename);
 % Load the lh surf and overlay the lh contrast map on the inflated surface
 % removed  -colorscale but should add back in if needed later
 % lateral view
-command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=0.5,3:overlay_color=colorwheel,inverse -viewport 3d -view lateral -layout 1 -zoom 1.5 --screenshot %s', lh_surf, lh_contrast, lh_lateral_outputImage);
+command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=1.5,3:overlay_color=colorwheel,inverse -viewport 3d -view lateral -layout 1 -zoom 1.5 --screenshot %s', lh_surf, lh_contrast, lh_lateral_outputImage);
 system(command);
 % ventral view
-command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=0.5,3:overlay_color=colorwheel,inverse -viewport 3d -view inferior -cam Roll 90 -layout 1 -zoom 1.5 --screenshot %s', lh_surf, lh_contrast, lh_ventral_outputImage);
+command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=1.5,3:overlay_color=colorwheel,inverse -viewport 3d -view inferior -cam Roll 90 -layout 1 -zoom 1.5 --screenshot %s', lh_surf, lh_contrast, lh_ventral_outputImage);
 system(command);
 
 % Load the rh surf and overlay the rh contrast map on the inflated surface
 % lateral view
-command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=0.5,3:overlay_color=colorwheel,inverse -viewport 3d -view lateral -layout 1 -zoom 1.5 --screenshot %s', rh_surf, rh_contrast, rh_lateral_outputImage);
+command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=1.5,3:overlay_color=colorwheel,inverse -viewport 3d -view lateral -layout 1 -zoom 1.5 --screenshot %s', rh_surf, rh_contrast, rh_lateral_outputImage);
 system(command);
 % ventral view
-command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=0.5,3:overlay_color=colorwheel,inverse -viewport 3d -view inferior -cam Roll 90 -layout 1 -zoom 1.5 --screenshot %s', rh_surf, rh_contrast, rh_ventral_outputImage);
+command = sprintf('freeview -f %s:overlay=%s:overlay_threshold=1.5,3:overlay_color=colorwheel,inverse -viewport 3d -view inferior -cam Roll 90 -layout 1 -zoom 1.5 --screenshot %s', rh_surf, rh_contrast, rh_ventral_outputImage);
 system(command);
 
 

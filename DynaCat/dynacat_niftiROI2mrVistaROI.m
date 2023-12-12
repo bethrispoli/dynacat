@@ -1,4 +1,4 @@
-function ROI = niftiROI2mrVistaROI(ni, varargin)
+function ROI = dynacat_niftiROI2mrVistaROI(nifti, varargin)
 % Convert a nifti to  into a mrVista Gray ROI
 %
 % ROI = niftiROI2mrVistaROI(ni, varargin)
@@ -61,7 +61,7 @@ end
 % mrLoadRet coords are in [axial(S:I), coronal(A:P), sagittal(L:R)] format.
 % This function permutes our preferred NIFTI format into our mrLoadRet format.
 
-data = nifti2mrVistaAnat(ni);
+data = nifti2mrVistaAnat(nifti);
 
 ROIinds = find(data);
 
@@ -86,3 +86,4 @@ if exist('spath', 'var'), save(fullfile(spath, savename), 'ROI'); end
 
 % Done
 return
+

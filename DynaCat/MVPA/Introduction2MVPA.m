@@ -1,0 +1,146 @@
+%% 
+% An introduction to Multivoxel Pattern Analyses (MVPA)                                                                                                                                                       
+% 
+% *Before starting this tutorial add to your matlab path the VISTAsoft path 
+% and the path to this code directory and its subdirectories.*
+
+% cd to the MVPA code directory on your computer
+%cd /path/to/MVPA/
+cd /share/kalanit/biac2/kgs/projects/DynamicCategories/code/DynaCat/MVPA
+addpath(genpath(pwd))
+%% 
+% This activity uses the data of a subject who participated in the 5 domain, 
+% 10 category experiment. The 10 categories are faces (faceA: adult faces; faceC: 
+% childfaces), bodyparts (B: headless bodies, L: limbs), objects (C:cars; G: string 
+% instruments); places (P: corridors, H: houses); characters (W: words; N: numbers).  
+% During the experiment the subject fixated on a central dot and indicated with 
+% a button press when they saw an image with just a texture background but no 
+% object (oddball task).  The subject whose data is used in this activity participated 
+% in this experiment twice in a span of 2 years. ROIs were defined in the later 
+% session and the responses in this ROI from the first session will be analyzed.  
+% 
+% Details of the experiment are found here: <https://academic.oup.com/cercor/advance-article/doi/10.1093/cercor/bhy178/5085445?guestAccessKey=307c2faf-a302-4cf6-9c7b-6dcf93f3eacd 
+% *Learning to Read Increases the Informativeness of Distributed Ventral Temporal 
+% Responses*>* *Marisa Nordt, Jesse Gomez, Vaidehi S. Natu, Brianna Jeska and 
+% Kalanit Grill-Spector. Cerebral Cortex (2019) 3124-3139 
+% 
+% The data are organized in the directory ./data/OS_4_1
+% 
+% The subject participated in 3 scans of the experiment in this session with 
+% different stimuli and order. The base directory contains 3 nifti files: kidLoc_run1.nii.gz, 
+% kidLoc_run2.nii.gz, kidLoc_run3.nii.gz, of the 3 runs of the experiment.
+% 
+% The description of each scan is in the corresponding parfiles: script_kidLoc_2Hz_run1.par, 
+% script_kidLoc_2Hz_run2.par, script_kidLoc_2Hz_run3.par. Parfiles are text files 
+% with 4 columns: (1) onset in seconds of each 4s trial, (2) condition number 
+% (0 is baseline: blank screen + fixation), (3) condition name, (4) condition 
+% color.
+% 
+% The data has been motion corrected both within and between scans, aligned 
+% to the 3D volume anatomy of the subject, using the fLOC code writted by Anthony 
+% Stigliani, Marisa Nordt, and Michael Perry: <https://github.com/VPNL/fLoc https://github.com/VPNL/fLoc>
+% 
+% The ./OS_4_1/Gray directory contains the TimeSeries of each scan of the experiment 
+% and the voxelwise GLM results; In this activity we will use the 3rd data type: 
+% 'MotionComp_RefScan1', containing the data that has been motion corrected within 
+% each scan and then between runs to scan1.
+% 
+% Please read and run each section sequentially. Then answer the questions and 
+% submit your answers as well as the graphs that this activity generated.
+% 
+% *Edit here the path to where you put the subject data in your computer *
+
+% Full path to the data directory on your computer
+ %DataDir='/path/to/data/';
+ DataDir='/share/kalanit/biac2/kgs/projects/DynamicCategories/data/DynaCat/';
+ 
+%% 
+% Set session parameters that will be relevant to the analysis
+
+ sessions={'test_subj05', 'subj-06', 'subj-07'}; % subject session 
+ scans =  [1 2 3 4 5 6 7 8]; % runs
+ dataType=3; % Motion corrected within and between scans
+ % Here we will use anatomically defined ROIs of the lateral and medial
+ % VTC, see paper above
+ ROIs={'lh_anat_roi_STS', 'rh_anat_roi_STS', 'lh_anat_roi_LOTC', 'rh_anat_roi_LOTC', 'lh_anat_roi_VTC', 'rh_anat_roi_VTC'};
+%% 
+% Load and visualize the ROIs on the cortical surface of the left and right 
+% hemispheres
+
+sessionPath = fullfile (DataDir , sessions{1}, 'session1');
+cd(sessionPath)
+
+% mrvista operates with vw. initHiddenGray opens a hidden view (no GUI) and
+% initalizes it to the gray (renders maps on the gray matter only) with the
+% dataType and ROIs specified above.
+vw=initHiddenGray(dataType, 1, ROIs); 
+
+% set ROIs colors according to partition
+nROIs = length(ROIs);
+% for i=1:nROIs
+%     if strfind(vw.ROIs(i).name, 'lat')
+%         ROI_color=[0 0 0];
+%         vw = viewSet(vw, 'ROI color', ROI_color, i);  % set the lateral ROI color to black
+%     elseif strfind(vw.ROIs(i).name, 'medial')
+%         ROI_color=[1 1 1];
+%         vw = viewSet(vw, 'ROI color', ROI_color, i); % set the medial ROI color to white
+%     end
+% end
+
+% can add code to visualize ROIs on brain later
+
+%% 
+% This experiment has 8 runs; The function computeRSMs visualizes the MVP for 
+% each run and computes the RSM for each ROI as the average pairwise correlation 
+% between all pairs of runs and then symmetrizes the crosscorrelation matrix to 
+% generate the RSM 
+% 
+% Using the function computeRSMs you can compute RSM from three types of metrics 
+% indicated by the varivable ampTypes: 'betas', 'subtractedBetas', 'zscore'. 
+
+ampType='betas';
+[RSMbetas, MVPbetas]=computeRSMs(DataDir,sessions, ROIs,scans, ampType);
+
+%% 
+% We saw in class that the resulting RSM may differ if you calculate the MVPs 
+% using different metrics. Let's now calculate an RSM using the mean subtracted 
+% betas metric in which the mean beta value of each voxel is subtracted from each 
+% of the 10 betas for that voxel. 
+
+ampType='subtractedBetas';
+[RSMsubBetas, MVPsubBetas]=computeRSMs(DataDir,sessions, ROIs,scans, ampType);
+%% 
+% Question 3: In what way are the patterns of results dissimilar than for the 
+% betas metric? 
+% 
+% Question 4: Why does the metric change the apparent representational structure?
+%% 
+% Let's now compute an RSM using the zscore metric. This metric subtracts from 
+% each voxel its mean betas and then normalizes each value by the residual error 
+% of the GLM. Consequently,voxels with high residual error have lower values than 
+% voxels with lower residual errror. In other words, this metric places greater 
+% weight on voxels that are well explained by the experimental manipulation
+
+ampType='zscore';
+[RSMzscore, MVPzscore]=computeRSMs(DataDir,sessions, ROIs,scans, ampType);
+%% 
+% Question 5:  In what way are the results for the subtracted betas and z-score 
+% similar and dissimilar?
+% 
+% Question 6: What does the z-score metric reveal about the similarity and differences 
+% in representational structure across lateral and medial VTC?
+% 
+% Question 7:  What does zero correlation in the RSM reflect for the different 
+% metrics?
+% 
+% Question 8: Based on this tutorial which metric would you use for future MVPA 
+% and why? 
+%% 
+% *Extra credit:*  Use Multi Dimensional Scaling (MDS) to visualize the representational 
+% structure of your ROIs in 2D. Align output to the MDS of the 'lh_vtc_lateral' 
+% ROI using the Procrustes tranformation
+
+subj = 'subj-06';
+session = 'session1';
+plotSingleRSMinMDS(RSMzscore, subj,session,'lh_vtc_lateral')
+

@@ -2,6 +2,7 @@ function out_paths = dynacat_mrv2fs_parameterMap(map_path, fs_path, fs_id, cba_f
 % Transforms a mrVista paramter map into FreeSurfer-compatible .mgh files.
 %
 % Inputs
+%   curr_contrast_name 
 %   map_path:       path to .mat file storing mrVista parameter
 %   fs_path:        path to the freesurfer recon directory
 %   fs_id:          name of subject directory in FreesurferSegmentations
@@ -19,7 +20,7 @@ fs_dir = fullfile(fs_path, fs_id);
 if ~ exist(fs_dir, 'dir') == 7
     error('fs_id not found in FreesurferSegmentations');
 end
-if nargin < 4
+if nargin < 5
     cba_flag = 0;
 end
 if cba_flag == 1
@@ -47,12 +48,26 @@ mri_dir = fullfile(fs_dir, 'mri'); surf_dir = fullfile(fs_dir, 'surf');
 out_path = fullfile(mri_dir, [map_name '.nii.gz']);
 home_dir = pwd;
 
-% generate FreeSurfer parameter map file from mrVista parameter map
-cd(session_dir);
+% % generate FreeSurfer parameter map file from mrVista parameter map
+% cd(session_dir);
+% load mrSESSION.mat
+% load('mrInit_params.mat', 'params')
+
 hg = initHiddenGray(dt, 1);
 hg = loadParameterMap(hg, map_path);
 hg = loadAnat(hg);
-functionals2itkGray(hg, 1, out_path);
+
+% % store functional nifti data fields
+% functionalNifti = readFileNifti(params.functionals{1});
+% map = hg.map{1};
+% contrast_name = erase(contrast_name, '.mat');
+% fileName = fullfile(fs_path, fs_id, 'mri', [contrast_name '.nii.gz']);
+% 
+% contrastNifti = dynacat_contrastMap2Nii(map,fileName,functionalNifti)
+
+
+
+dynacat_functionals2itkGray(hg, 1, out_path);
 cd(mri_dir);
 unix(['mri_convert -ns 1 -odt float -rt nearest -rl orig.mgz ' ...
     map_name '.nii.gz ' map_name '.nii.gz --conform']);

@@ -1,4 +1,4 @@
-function dynacat_computeContrastMaps(session_path)
+function dynacat_computeContrastMaps_old_before_subj04(session_path)
 % dynacat_computeContrastMaps(session_path)
 % computes contrast maps for dynacat
 % 
@@ -52,36 +52,36 @@ tr = find(cond_num_list == 33); cond_num_list(tr) = []; cond_list(tr) = [];
 % store functional nifti data field
 functional_niftis = readFileNifti(params.functionals{1});
 
-%% compute each individual condition vs all
-% ex. bodies-normal_vs_all, bodies-scrambled_vs_all, etc.
-for curr_cond = 1:length(cond_list)
-    active_cond = curr_cond;
-    control_conds = setdiff(cond_num_list, active_cond);
-    contrast_name = [strcat(cond_list{curr_cond}) '_vs_all'];
-    hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
-    
-    % storing contrast map as nifti
-    niftiFileName = [contrast_name,'.nii.gz'];
-    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName,functional_niftis);
-    % saving nifti under Inplane/GLMs/NiftiMaps
-    cd Inplane/GLMs/NiftiMaps
-    writeFileNifti(contrastNifti);
-    cd ../../..
-end
+% %% compute each individual condition vs all
+% % ex. bodies-normal_vs_all, bodies-scrambled_vs_all, etc.
+% for curr_cond = 1:length(cond_list)
+%     active_cond = curr_cond;
+%     control_conds = setdiff(cond_num_list, active_cond);
+%     contrast_name = [strcat(cond_list{curr_cond}) '_vs_all'];
+%     hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
+% 
+%     % storing contrast map as nifti
+%     niftiFileName = [contrast_name,'.nii.gz'];
+%     contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName,functional_niftis);
+%     % saving nifti under Inplane/GLMs/NiftiMaps
+%     cd Inplane/GLMs/NiftiMaps
+%     writeFileNifti(contrastNifti);
+%     cd ../../..
+% end
 
 %% compute categories constrasts
 % ex. bodies-allMotion_vs_all
-faces = [1 2 3];
-hands = [4 5 6];
-bodies = [7 8 9];
-animals = [10 11 12];
-objects1 = [13 14 15];
-objects2 = [16 17 18];
-scenes1 = [19 20 21];
-scenes2 = [22 23 24];
+hands = [1 2 3 4];
+faces = [5 6 7 8];
+bodies = [9 10 11 12];
+animals = [13 14 15 16];
+objects1 = [17 18 19 20];
+objects2 = [21 22 23 24];
+scenes1 = [25 26 27 28];
+scenes2 = [29 30 31 32];
 
-categories = {faces hands bodies animals objects1 objects2 scenes1 scenes2};
-categories_names = {'faces' 'hands' 'bodies' 'animals' 'objects1' 'objects2' 'scenes1' 'scenes2'};
+categories = {hands faces bodies animals objects1 objects2 scenes1 scenes2};
+categories_names = {'hands' 'faces' 'bodies' 'animals' 'objects1' 'objects2' 'scenes1' 'scenes2'};
 
 for category_index = 1:length(categories)
     curr_category = categories{category_index};
@@ -103,12 +103,13 @@ end
 
 %% compute dynamic format contrasts vs all
 % ex. normal_vs_all, linear_vs_all, scrambled_vs_all, still_vs_all
-normal = [1 4 7 10 13 16 19 22];
-linear = [2 5 8 11 14 17 20 23];
-still = [3 6 9 12 15 18 21 24];
+normal = [1 5 9 13 17 21 25 29];
+scrambled = [3 7 11 15 19 23 27 31];
+linear = [2 6 10 14 18 22 26 30];
+still = [4 8 12 16 20 24 28 32];
 
-dynamic_format = {normal linear still};
-dynamic_format_names = {'normal' 'linear' 'still'};
+dynamic_format = {normal scrambled linear still};
+dynamic_format_names = {'normal' 'scrambled' 'linear' 'still'};
 
 for dynamic_format_index = 1:length(dynamic_format)
     curr_dynamic_format = dynamic_format{dynamic_format_index};
@@ -129,7 +130,21 @@ for dynamic_format_index = 1:length(dynamic_format)
 end
 
 %% compute dynamic formats vs each other dynamic format
-% ex. normal_vs_linear, normal_vs_still, etc
+% ex. normal_vs_linear, normal_vs_scrambled, etc
+
+% compute normal vs each other dynamic format
+% compute normal vs scrambled
+active_conds = normal;
+control_conds = scrambled;
+contrast_name = 'normal_vs_scrambled';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
 
 % compute normal vs linear
 active_conds = normal;
@@ -157,12 +172,64 @@ cd Inplane/GLMs/NiftiMaps
 writeFileNifti(contrastNifti);
 cd ../../..
 
+% compute scrambled vs each other dynamic format
+% compute scrambled vs normal
+active_conds = scrambled;
+control_conds = normal;
+contrast_name = 'scrambled_vs_normal';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+% compute scrambled vs normal
+active_conds = scrambled;
+control_conds = linear;
+contrast_name = 'scrambled_vs_linear';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+% compute scrambled vs still
+active_conds = scrambled;
+control_conds = still;
+contrast_name = 'scrambled_vs_still';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
 
 % compute linear vs each other dynamic format
 % compute linear vs normal
 active_conds = linear;
 control_conds = normal;
 contrast_name = 'linear_vs_normal';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+% compute linear vs scrambled
+active_conds = linear;
+control_conds = scrambled;
+contrast_name = 'linear_vs_scrambled';
 hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
 % storing contrast map as nifti
 niftiFileName = [contrast_name,'.nii.gz'];
@@ -199,6 +266,18 @@ cd Inplane/GLMs/NiftiMaps
 writeFileNifti(contrastNifti);
 cd ../../..
 
+% compute still vs normal
+active_conds = still;
+control_conds = scrambled;
+contrast_name = 'still_vs_scrambled';
+hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
+% storing contrast map as nifti
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+% saving nifti under Inplane/GLMs/NiftiMaps
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
 
 % compute still vs linear
 active_conds = still;
@@ -214,11 +293,12 @@ writeFileNifti(contrastNifti);
 cd ../../..
 
 %% compute normal vs still all categories
+% added after making addtional maps for subj02 still needs to be tested 
 for category_index = 1:length(categories)
     curr_category = categories{category_index};
 
     active_conds = curr_category(1); %normal motion condition for the category
-    control_conds = curr_category(3); %still condition for the category
+    control_conds = curr_category(4); %still condition for the category
 
     contrast_name = [categories_names{category_index} '-normal_vs_' categories_names{category_index} '-still'];
 
@@ -232,97 +312,35 @@ for category_index = 1:length(categories)
     cd ../../..
 end
 
-%% compute normal for each category normal vs normal for all categories
-for category_index = 1:length(categories)
-    curr_category = categories{category_index};
-
-    active_conds = curr_category(1); %normal motion condition for the categories
-    control_conds = setdiff(normal, active_conds); %all other normal motion conditions
-
-    contrast_name = [categories_names{category_index} '-normal_vs_allNormal'];
-
-    hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
-    % storing contrast map as nifti
-    niftiFileName = [contrast_name,'.nii.gz'];
-    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
-    % saving nifti under Inplane/GLMs/NiftiMaps
-    cd Inplane/GLMs/NiftiMaps
-    writeFileNifti(contrastNifti);
-    cd ../../..
-
-end
-
-%% compute still for each category still vs still for all categories
-for category_index = 1:length(categories)
-    curr_category = categories{category_index};
-
-    active_conds = curr_category(3); %still motion condition for the categories
-    control_conds = setdiff(still, active_conds); %all other normal motion conditions
-
-    contrast_name = [categories_names{category_index} '-still_vs_allStill'];
-
-    hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
-    % storing contrast map as nifti
-    niftiFileName = [contrast_name,'.nii.gz'];
-    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
-    % saving nifti under Inplane/GLMs/NiftiMaps
-    cd Inplane/GLMs/NiftiMaps
-    writeFileNifti(contrastNifti);
-    cd ../../..
-
-end
-
-%% compute linear for each category vs linear for all categories
-for category_index = 1:length(categories)
-    curr_category = categories{category_index};
-
-    active_conds = curr_category(2); %still motion condition for the categories
-    control_conds = setdiff(linear, active_conds); %all other normal motion conditions
-
-    contrast_name = [categories_names{category_index} '-linear_vs_allLinear'];
-
-    hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
-    % storing contrast map as nifti
-    niftiFileName = [contrast_name,'.nii.gz'];
-    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
-    % saving nifti under Inplane/GLMs/NiftiMaps
-    cd Inplane/GLMs/NiftiMaps
-    writeFileNifti(contrastNifti);
-    cd ../../..
-
-end
-
-%%
-
-% % compute combined scenes contrast
+%% compute combined scenes contrast
 % scenesCombined_vs_all
-% scenes = [25 26 27 28 29 30 31 32];
-% active_cond = scenes;
-% control_conds = setdiff(cond_num_list, active_cond);
-% contrast_name = 'scenesCombined_vs_all';
-% hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
+scenes = [25 26 27 28 29 30 31 32];
+active_cond = scenes;
+control_conds = setdiff(cond_num_list, active_cond);
+contrast_name = 'scenesCombined_vs_all';
+hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
 % storing contrast map as nifti
-% niftiFileName = [contrast_name,'.nii.gz'];
-% contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
 % saving nifti under Inplane/GLMs/NiftiMaps
-% cd Inplane/GLMs/NiftiMaps
-% writeFileNifti(contrastNifti);
-% cd ../../..
-% 
-% % compute combined objects contrast
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
+
+%% compute combined objects contrast
 % objectsCombined_vs_all
-% objects = [17 18 19 20 21 22 23 24];
-% active_cond = objects;
-% control_conds = setdiff(cond_num_list, active_cond);
-% contrast_name = 'objectsCombined_vs_all';
-% hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
+objects = [17 18 19 20 21 22 23 24];
+active_cond = objects;
+control_conds = setdiff(cond_num_list, active_cond);
+contrast_name = 'objectsCombined_vs_all';
+hi = computeContrastMap2(hi, active_cond, control_conds, contrast_name, 'mapUnits','T');
 % storing contrast map as nifti
-% niftiFileName = [contrast_name,'.nii.gz'];
-% contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
+niftiFileName = [contrast_name,'.nii.gz'];
+contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
 % saving nifti under Inplane/GLMs/NiftiMaps
-% cd Inplane/GLMs/NiftiMaps
-% writeFileNifti(contrastNifti);
-% cd ../../..
+cd Inplane/GLMs/NiftiMaps
+writeFileNifti(contrastNifti);
+cd ../../..
 
 %% compute animate vs inanimate
 active_conds = [hands faces bodies animals];
@@ -336,28 +354,6 @@ contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
 cd Inplane/GLMs/NiftiMaps
 writeFileNifti(contrastNifti);
 cd ../../..
-
-%%
-% compute normal for each category vs still for that category
-for category_index = 1:length(categories)
-    curr_category = categories{category_index};
-
-    active_conds = curr_category(1); %normal motion condition for the category
-    control_conds = curr_category(3); %still condition for the category
-
-    contrast_name = [categories_names{category_index} '-normal_vs_' categories_names{category_index} '-still'];
-
-    hi = computeContrastMap2(hi, active_conds, control_conds, contrast_name, 'mapUnits','T');
-    % storing contrast map as nifti
-    niftiFileName = [contrast_name,'.nii.gz'];
-    contrastNifti = contrastMap2Nii(hi.map{1},niftiFileName, functional_niftis);
-    % saving nifti under Inplane/GLMs/NiftiMaps
-    cd Inplane/GLMs/NiftiMaps
-    writeFileNifti(contrastNifti);
-    cd ../../..
-
-end
-
 
 %%
 disp(['Successfully computed DynaCat contrast maps for ' session_path '!'])

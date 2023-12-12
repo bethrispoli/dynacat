@@ -16,10 +16,14 @@ function dynacat_freesurferLabel2niftiROI(subject_dir, subject, hemi, labels, vi
 anatDir = fullfile(vistaDir,'3DAnatomy');
 fsDir = fullfile(subject_dir, subject);
 
+nifti_roi_dir = fullfile(fsDir,'niftiROIs');
+if ~exist(nifti_roi_dir, 'dir')
+    mkdir(nifti_roi_dir);
+end
+
 for l = 1:numel(labels)
-    
+
     % load the label file
-    %labelName = labels(l);
     labelName = cell2mat(strrep(labels(l), '.label', ''));
 
     % volume to align nifti to
@@ -28,25 +32,26 @@ for l = 1:numel(labels)
     % output volume name
     niftiFileName = [labelName '.nii.gz'];
     %outname = fullfile(anatDir,'niftiROIs',niftiFileName);
-    outname = fullfile(fsDir,'niftiROIs',niftiFileName);
-    
+    outname = fullfile(nifti_roi_dir,niftiFileName);
+
     % create registration file if it doesn't exist
     reg = fullfile(fsDir,'surf','register.dat');
     if ~isfile(reg)
-     origPath = [fsDir, subject, '/mri/orig.mgz'];
-     outFile = [fsDir, subject, '/surf/register.dat'];
+     origPath = [fsDir, '/mri/orig.mgz'];
+     outFile = [fsDir, '/surf/register.dat'];
      cmd = ['tkregister2 --mov ' origPath ' --noedit --s ' subject ' --regheader --reg ' outFile];
      unix(cmd)
     end
 
+    label_file_path = fullfile(fsDir,'label',[labelName, '.label']);
+
     % convert the .label file to nifti format
-    cmd = [' mri_label2vol --label ',fullfile(fsDir,'label',[labelName, '.label']),...
+    cmd = [' mri_label2vol --label ', label_file_path,...
      ' --temp ', tmp,...
-     ' --identity', ...
+     ' --reg ', reg,...
      ' --proj frac 0 1 .1',...
      ' --subject ' subject,...
      ' --hemi ',hemi,...
      ' --fill-ribbon --o ',outname];
     system(cmd)        
 end
-
